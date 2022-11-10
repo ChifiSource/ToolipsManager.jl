@@ -1,0 +1,4 @@
+name = "ToolipsManager"
+uuid = "9f8d5713-0c18-4d57-bcdd-a9f7d0fb48e6"
+authors = ["emmac <emmettgb@gmail.com>"]
+version = "0.1.0"
