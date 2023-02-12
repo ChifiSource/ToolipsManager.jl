@@ -17,66 +17,9 @@ is a toolips server.
 """
 module ToolipsManager
 using Toolips
-import Toolips: ServerExtension, ToolipsServer
+import Toolips: ServerExtension, ToolipsServer, AbstractRoute
 using ToolipsRemote
-using ToolipsSession
-
-universal_controls = Dict{String, Function}(
-    "?" => manager_help, "status" => status,
-    "manage" => management, "check" => check)
-
-"""
-**Manager**
-### add_management!(ws::ToolipsServer, key::String; motd::String = "##### please login")
-------------------
-Adds Manager's remote extension to a server, putting the `manager_remote` controller
-to return the `ToolipsRemote` extension.
-#### example
-```
-
-```
-"""
-add_management!(ws::ToolipsServer, key::String;
-    motd::String = """##### please login:""") = begin
-    push!(ws, manager_remote(ws.hostname, key, motd))
-end
-
-"""
-**Manager**
-### manager_remote(name::String, key::String, motd::String) -> ::ToolipsRemote.Remote
-------------------
-Createss a remote function by plugging universal controls into the `ToolipsRemote.controller`
-    and using that controller to construct a new `ToollpsRemote.Remote` extension.
-#### example
-```
-
-```
-"""
-function manager_remote(name::String, key::String, motd::String)
-    remotefunctions = Dict(5 => ToolipsRemote.controller(universal_controls))
-    users = [name => key => 5]
-    Remote(remotefunction, users; motd = motd)
-end
-
-"""
-**Manager**
-### management_server_remote(name::String, key::String, motd::String) -> ::ToolipsRemote.Remote
-------------------
-Createss a remote function by plugging universal controls into the `ToolipsRemote.controller`
-    and using that controller to construct a new `ToollpsRemote.Remote` extension.
-#### example
-```
-
-```
-"""
-function management_server_remote(name::String, key::String, motd::String)
-    contr = copy(universal_controls)
-    push!(contr, "overview" => overview)
-    ToolipsRemote.controller()
-    remotefunctions = Dict(5 => )
-    users = [name => key => 5]
-    Remote(remotefunction, users; motd = motd)
-end
+using ToolipsRemote: RemoteConnection
 
 """
 **Manager**
@@ -153,7 +96,7 @@ end
 
 """
 **Manager**
-### managep(c::Connection)
+### manage(c::Connection)
 ------------------
 
 #### example
@@ -163,6 +106,63 @@ end
 """
 function manage(c::Connection)
 
+end
+
+universal_controls = Dict{String, Function}(
+    "?" => manager_help, "status" => status,
+    "manage" => management, "check" => check)
+
+"""
+**Manager**
+### add_management!(ws::ToolipsServer, key::String; motd::String = "##### please login")
+------------------
+Adds Manager's remote extension to a server, putting the `manager_remote` controller
+to return the `ToolipsRemote` extension.
+#### example
+```
+
+```
+"""
+add_management!(ws::ToolipsServer, key::String;
+    motd::String = """##### please login:""") = begin
+    push!(ws, manager_remote(ws.hostname, key, motd))
+end
+
+"""
+**Manager**
+### manager_remote(name::String, key::String, motd::String) -> ::ToolipsRemote.Remote
+------------------
+Createss a remote function by plugging universal controls into the `ToolipsRemote.controller`
+    and using that controller to construct a new `ToollpsRemote.Remote` extension.
+#### example
+```
+
+```
+"""
+function manager_remote(name::String, key::String, motd::String)
+    remotefunctions = Dict(5 => ToolipsRemote.controller(universal_controls))
+    users = [name => key => 5]
+    Remote(remotefunctions, users; motd = motd)
+end
+
+"""
+**Manager**
+### management_server_remote(name::String, key::String, motd::String) -> ::ToolipsRemote.Remote
+------------------
+Createss a remote function by plugging universal controls into the `ToolipsRemote.controller`
+    and using that controller to construct a new `ToollpsRemote.Remote` extension.
+#### example
+```
+
+```
+"""
+function management_server_remote(name::String, key::String, motd::String)
+    contr = copy(universal_controls)
+    push!(contr, "overview" => overview)
+    ToolipsRemote.controller()
+    remotefunctions = Dict(5 => ToolipsRemote.controller(universal_controls))
+    users = [name => key => 5]
+    Remote(remotefunctions, users; motd = motd)
 end
 
 """
@@ -200,12 +200,13 @@ mutable struct ManagementServer <: ToolipsServer
         hostname::String = "", routes::Vector{AbstractRoute} = routes(route("/",
         (c::Connection) -> write!(c, p(text = "Hello world!")))),
         extensions::Vector{ServerExtension} = Vector{ServerExtension}([]))
-        push!(extensions, management_server_remote(hostname))
+        push!(extensions, management_server_remote(usrpwd[1], usrpwd[2], "hello"))
         start() = Toolips._start(host, port, routes, extensions, server, hostname)
         new(host, hostname, port, routes, extensions, servers, start)::ManagementServer
     end
 end
 
+export add_management!, ManagementServer
 
 
 end # module

@@ -2,3 +2,7 @@ name = "ToolipsManager"
 uuid = "9f8d5713-0c18-4d57-bcdd-a9f7d0fb48e6"
 authors = ["emmac <emmettgb@gmail.com>"]
 version = "0.1.0"
+
+[deps]
+Toolips = "a47e2ad8-fcf7-417c-9746-32b9bdf220bd"
+ToolipsRemote = "706d13b3-298e-4297-9e9a-14f4a49b71e5"
