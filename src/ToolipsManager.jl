@@ -20,19 +20,25 @@ using Toolips
 import Toolips: ServerExtension, ToolipsServer, AbstractRoute
 using ToolipsRemote
 using ToolipsRemote: RemoteConnection
+using ToolipsSession
 
 """
 **Manager**
 ### manager_help(args::Vector{String}, c::RemoteConnection)
 ------------------
-
+This is a controller function that provides the `?` application functionality
+to the `Remote` extension returned by both `manager_remote` and
+`management_server_remote`. If you want to deploy a server which manages other
+ToolipsServers (it can still be a website or endpoint server, it just also
+features other servers in a Vector within.) This way server controls can be
+external rather than internal with a mere use of `add_remote`.
 #### example
 ```
 
 ```
 """
 function manager_help(args::Vector{String}, c::RemoteConnection)
-    write!(c, h("e", 2, text = "help"))
+    return("""## ToolipsManager""")
 end
 
 """
@@ -46,7 +52,18 @@ end
 ```
 """
 function overview(args::Vector{String}, c::RemoteConnection)
-
+    key = ToolipsSession.gen_ref()
+    r = route("/manage") do c::Connection
+        g = getargs(c)
+        if :key in keys(g)
+            if g[:key] == key
+                write!(c, "hello!")
+            end
+        end
+    end
+    push!(c.routes, r)
+    link = "http://127.0.0.1:8001/manage?key=$key"
+    return("""[overiew]($link)""")
 end
 
 """
@@ -140,7 +157,7 @@ Createss a remote function by plugging universal controls into the `ToolipsRemot
 ```
 """
 function manager_remote(name::String, key::String, motd::String)
-    remotefunctions = Dict(5 => ToolipsRemote.controller(universal_controls))
+    remotefunctions = ToolipsRemote.controller(universal_controls)
     users = [name => key => 5]
     Remote(remotefunctions, users; motd = motd)
 end
@@ -159,10 +176,10 @@ Createss a remote function by plugging universal controls into the `ToolipsRemot
 function management_server_remote(name::String, key::String, motd::String)
     contr = copy(universal_controls)
     push!(contr, "overview" => overview)
-    ToolipsRemote.controller()
-    remotefunctions = Dict(5 => ToolipsRemote.controller(universal_controls))
+    d = Dict{Int64, Function}()
+    push!(d, 5 => ToolipsRemote.controller(contr))
     users = [name => key => 5]
-    Remote(remotefunctions, users; motd = motd)
+    Remote(d, users; motd = motd)
 end
 
 """
@@ -188,21 +205,24 @@ routes::Vector{AbstractRoute} = [route("/", ...)], extensions::Vector{ServerExte
 """
 mutable struct ManagementServer <: ToolipsServer
     ip::String
-    hostname::String
+    host::String
     port::Int64
     routes::Vector{AbstractRoute}
+    server::Toolips.Sockets.TCPServer
     extensions::Vector{ServerExtension}
     servers::Vector{Toolips.WebServer}
     start::Function
-    function ManagementServer(servers::Vector{Toolips.WebServer},
+    function ManagementServer(servers::Vector{WebServer},
         usrpwd::Pair{String, String},
-        host::String = "127.0.0.1", port::Int64 = 8000;
-        hostname::String = "", routes::Vector{AbstractRoute} = routes(route("/",
+        ip::String = "127.0.0.1", port::Int64 = 8000;
+        host::String = "", routes::Vector{AbstractRoute} = routes(route("/",
         (c::Connection) -> write!(c, p(text = "Hello world!")))),
         extensions::Vector{ServerExtension} = Vector{ServerExtension}([]))
+        server::Sockets.TCPServer = Sockets.listen(Sockets.InetAddr(
+        parse(IPAddr, ip), port))
         push!(extensions, management_server_remote(usrpwd[1], usrpwd[2], "hello"))
-        start() = Toolips._start(host, port, routes, extensions, server, hostname)
-        new(host, hostname, port, routes, extensions, servers, start)::ManagementServer
+        start() = Toolips._start(ip, port, routes, extensions, server, host)
+        new(ip, host, port, routes, server,  extensions, servers, start)::ManagementServer
     end
 end
 
