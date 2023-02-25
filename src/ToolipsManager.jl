@@ -21,6 +21,7 @@ import Toolips: ServerExtension, ToolipsServer, AbstractRoute
 using ToolipsRemote
 using ToolipsRemote: RemoteConnection
 using ToolipsSession
+using Toolips.Dates
 
 """
 **Manager**
@@ -182,47 +183,20 @@ function management_server_remote(name::String, key::String, motd::String)
     Remote(d, users; motd = motd)
 end
 
-"""
-### ManagementServer <: ToolipsServer
-- ip**::String**
-- hostname**::String**
-- port**::Int64**
-- routes**::Vector{AbstractRoute}**
-- extensions**::Vector{ServerExtension}**
-- servers**::Vector{Toolips.WebServer}**
-- start**::Function**
+mutable struct Manager <: Toolips.ServerExtension
+    type::Vector{Symbol}
+    f::Function
+    function Manager()
 
-The Toolips `ManagementServer`
-##### example
-```
+    end
+end
 
-```
-------------------
-##### constructors
-- ManagementServer(servers::Vector{Toolips.WebServer}, usrpwd::Pair{String, String},
-host::String = "127.0.0.1", port::Int64 = 8000; hostname::String = "",
-routes::Vector{AbstractRoute} = [route("/", ...)], extensions::Vector{ServerExtension})
-"""
-mutable struct ManagementServer <: ToolipsServer
-    ip::String
-    host::String
-    port::Int64
-    routes::Vector{AbstractRoute}
-    server::Toolips.Sockets.TCPServer
-    extensions::Vector{ServerExtension}
-    servers::Vector{Toolips.WebServer}
-    start::Function
-    function ManagementServer(servers::Vector{WebServer},
-        usrpwd::Pair{String, String},
-        ip::String = "127.0.0.1", port::Int64 = 8000;
-        host::String = "", routes::Vector{AbstractRoute} = routes(route("/",
-        (c::Connection) -> write!(c, p(text = "Hello world!")))),
-        extensions::Vector{ServerExtension} = Vector{ServerExtension}([]))
-        server::Sockets.TCPServer = Sockets.listen(Sockets.InetAddr(
-        parse(IPAddr, ip), port))
-        push!(extensions, management_server_remote(usrpwd[1], usrpwd[2], "hello"))
-        start() = Toolips._start(ip, port, routes, extensions, server, host)
-        new(ip, host, port, routes, server,  extensions, servers, start)::ManagementServer
+mutable struct ManagerProbe <: Toolips.ServerExtension
+    type::Vector{Symbol}
+    data::Dict{Date, Dict{Symbol, Any}}
+    f::Function
+    function ManagerProbe()
+
     end
 end
 
