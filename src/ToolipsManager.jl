@@ -20,7 +20,7 @@ using Toolips
 import Toolips: ServerExtension, ToolipsServer, AbstractRoute
 using ToolipsRemote
 using ToolipsRemote: RemoteConnection
-using ToolipsSession
+# using ToolipsSession
 using Toolips.Dates
 
 """
@@ -126,10 +126,6 @@ function manage(c::Connection)
 
 end
 
-universal_controls = Dict{String, Function}(
-    "?" => manager_help, "status" => status,
-    "manage" => management, "check" => check)
-
 """
 **Manager**
 ### add_management!(ws::ToolipsServer, key::String; motd::String = "##### please login")
@@ -141,9 +137,15 @@ to return the `ToolipsRemote` extension.
 
 ```
 """
-add_management!(ws::ToolipsServer, key::String;
+add_management!(ws::ToolipsServer,  namekey::Pair{String, String},
+    servers::Vector{WebServer} = Vector{WebServer}();
     motd::String = """##### please login:""") = begin
-    push!(ws, manager_remote(ws.hostname, key, motd))
+    [begin
+        push!(serve.extensions, ManagerProbe())
+        serve.start()
+    end for serve in servers]
+    push!(ws.extensions, manager_remote(namekey[1], namekey[2], motd))
+    push!(ws.extensions, Manager(servers))
 end
 
 """
@@ -158,9 +160,12 @@ Createss a remote function by plugging universal controls into the `ToolipsRemot
 ```
 """
 function manager_remote(name::String, key::String, motd::String)
-    remotefunctions = ToolipsRemote.controller(universal_controls)
+    universal_controls = Dict{String, Function}(
+        "?" => manager_help, "status" => status,
+        "manage" => management, "check" => check, "overview" => overview)
+    d = Dict{Int64, Function}(5 => ToolipsRemote.controller(universal_controls))
     users = [name => key => 5]
-    Remote(remotefunctions, users; motd = motd)
+    Remote(d, users; motd = motd)
 end
 
 """
@@ -177,30 +182,39 @@ Createss a remote function by plugging universal controls into the `ToolipsRemot
 function management_server_remote(name::String, key::String, motd::String)
     contr = copy(universal_controls)
     push!(contr, "overview" => overview)
-    d = Dict{Int64, Function}()
-    push!(d, 5 => ToolipsRemote.controller(contr))
+
+    push!(d, )
     users = [name => key => 5]
     Remote(d, users; motd = motd)
 end
 
 mutable struct Manager <: Toolips.ServerExtension
-    type::Vector{Symbol}
-    f::Function
-    function Manager()
-
+    type::Symbol
+    servers::Vector{WebServer}
+    function Manager(servers::Vector{WebServer})
+        new(:connection, servers)::Manager
     end
 end
 
 mutable struct ManagerProbe <: Toolips.ServerExtension
-    type::Vector{Symbol}
+    type::Symbol
     data::Dict{Date, Dict{Symbol, Any}}
     f::Function
     function ManagerProbe()
-
+        data = Dict{Date, Dict{Symbol, Any}}()
+        f(c::Toolips.AbstractConnection) = begin
+            td::Date = today()
+            if td in keys(data)
+                data[td][:visits] += 1
+                return
+            end
+            push!(data, td => Dict{Symbol, Any}(:visits => 1))
+        end
+        new(:func, data, f)
     end
 end
 
-export add_management!, ManagementServer
+export add_management!
 
 
 end # module
