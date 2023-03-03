@@ -20,26 +20,37 @@ using Toolips
 import Toolips: ServerExtension, ToolipsServer, AbstractRoute
 using ToolipsRemote
 using ToolipsRemote: RemoteConnection
-# using ToolipsSession
+using ToolipsSession
 using Toolips.Dates
+using Prrty
+using ToolipsDefaults
 
 """
-**Manager**
-### manager_help(args::Vector{String}, c::RemoteConnection)
-------------------
-This is a controller function that provides the `?` application functionality
-to the `Remote` extension returned by both `manager_remote` and
-`management_server_remote`. If you want to deploy a server which manages other
-ToolipsServers (it can still be a website or endpoint server, it just also
-features other servers in a Vector within.) This way server controls can be
-external rather than internal with a mere use of `add_remote`.
-#### example
-```
-
-```
+### ? (command::String)
+The ? command is used to get helpful information on different controller commands.
+Use `? (method)` to learn more about each command. **Bold** arguments are
+required.\n
+| command | args |
+|:---------- | ---------- |
+| ?   | (method::String)  |
+| list   |                |
+| kill   | (**server**::Int64) |
+| overview |    |
 """
 function manager_help(args::Vector{String}, c::RemoteConnection)
-    return("""## ToolipsManager""")
+    helpinfo = Dict("?" => @doc(manager_help), "overview" => @doc(overview),
+    "list" => @doc(list), "kill" => @doc(kill))
+    if length(args) == 0
+        write!(c, string(helpinfo["?"]))
+    elseif length(args) == 1
+        println(args[1])
+        if args[1] in keys(helpinfo)
+            write!(c, string(helpinfo[args[1]]))
+            return
+        end
+        write!(c, "the method you requested help for does not exist.")
+    end
+
 end
 
 """
@@ -52,78 +63,75 @@ end
 
 ```
 """
-function overview(args::Vector{String}, c::RemoteConnection)
+function overview(args::Vector{String}, rc::RemoteConnection)
     key = ToolipsSession.gen_ref()
     r = route("/manage") do c::Connection
         g = getargs(c)
         if :key in keys(g)
             if g[:key] == key
-                write!(c, "hello!")
+                mainwindow = div("managerwindow")
+                mainwindow[:children] = Vector{Servable}([begin
+                mainsection = section("server-$e")
+                portheading = h("portheading$e", 2, text = string(server.port))
+                hname = h("hheading$e", 3, text = server.hostname)
+                datedata = server[:ManagerProbe].data
+                d = Dict([d => datedata[d][:visits] for d in keys(datedata)])
+                lplot = Prrty.line(Vector{Date}(collect(keys(d))),
+                 Vector{Int64}(collect(values(d))))
+                killbutton = button("killbutton$e", text = "kill")
+                if server.server.status != 4
+                    killbutton[:text] = "start"
+                end
+                on(c, killbutton, "click") do cm::ComponentModifier
+                    if server.server.status == 4
+                        kill!(server)
+                        set_text!(cm, killbutton, "start")
+                    else
+                        server.start()
+                        set_text!(cm, killbutton, "kill")
+                    end
+                end
+                push!(mainsection, portheading, hname, killbutton, br(),
+                lplot.window)
+                mainsection::Component{:section}
+            end for (e, server) in enumerate(c[:Manager].servers)])
+                write!(c, mainwindow)
             end
         end
     end
-    push!(c.routes, r)
-    link = "http://127.0.0.1:8001/manage?key=$key"
-    return("""[overiew]($link)""")
+    push!(rc.routes, r)
+    link = "http://127.0.0.1:8000/manage?key=$key"
+    return("""[overview]($link)""")
 end
 
-"""
-**Manager**
-### status(args::Vector{String}, c::RemoteConnection)
-------------------
-
-#### example
-```
-
-```
-"""
-function status(args::Vector{String}, c::RemoteConnection)
-    write!(c, h("e", 2, text = "$(c.hostname) status"))
-    stats = """$([r.path * "\n" for r in c.routes])
-        $([typeof(ext) * "\n" for ext in c.extensions])
-    """
+function list(args::Vector{String}, c::RemoteConnection)
+    [begin
+        active = "inactive\n"
+        if server.server.status == 4
+            active = "active\n"
+        end
+        write!(c, h("myh", 3, text = "[$e] $(server.hostname): $(server.port)"))
+        write!(c, p("active", text = active))
+    end for (e, server) in enumerate(c[:Manager].servers)]
 end
 
-"""
-**Manager**
-### check(args::Vector{String}, c::RemoteConnection)
-------------------
-
-#### example
-```
-
-```
-"""
-function check(args::Vector{String}, c::RemoteConnection)
-
-end
-
-"""
-**Manager**
-### management(args::Vector{String}, c::RemoteConnection)
-------------------
-
-#### example
-```
-
-```
-"""
-function management(args::Vector{String}, c::RemoteConnection)
-
-end
-
-"""
-**Manager**
-### manage(c::Connection)
-------------------
-
-#### example
-```
-
-```
-"""
-function manage(c::Connection)
-
+function kill(args::Vector{String}, c::RemoteConnection)
+    if length(args) == 1
+        try
+            n = parse(Int64, args[1])
+            serve = c[:Manager].servers[n]
+            kill!(serve)
+            write!(c, "server $n was stopped ($(serve.hostname):$(serve.port))")
+        catch
+            write!(c, "something went wrong ...")
+        end
+        return
+    end
+    write!(c, p("imp",
+    text = "improper usage, please provide a server index, for example:\n"))
+    write!(c, """```
+    kill 1
+    ```""")
 end
 
 """
@@ -161,8 +169,8 @@ Createss a remote function by plugging universal controls into the `ToolipsRemot
 """
 function manager_remote(name::String, key::String, motd::String)
     universal_controls = Dict{String, Function}(
-        "?" => manager_help, "status" => status,
-        "manage" => management, "check" => check, "overview" => overview)
+        "?" => manager_help, "list" => list,
+        "overview" => overview, "kill" => kill)
     d = Dict{Int64, Function}(5 => ToolipsRemote.controller(universal_controls))
     users = [name => key => 5]
     Remote(d, users; motd = motd)
